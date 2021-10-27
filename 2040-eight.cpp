@@ -722,7 +722,7 @@ void update( uint32_t p_tick )
  *        should be done here, it's pure presentation.
  */
 
-void draw( void )
+void draw( uint32_t p_tick )
 {
   /* If we have a splash screen to draw, just do that. */
   if ( g_splashing || g_splash_tone > 0 )
