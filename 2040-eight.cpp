@@ -4,6 +4,9 @@
  * This is a version of the ever-popular '2048' game, for the lovely little
  * PicoSystem handheld.
  *
+ * This code has rapidly become an excessivley large, messy single file
+ * implementation; I'm very sorry. I honestly code better than this usually!
+ *
  * Copyright (c) 2021 Pete Favelle <picosystem@ahnlak.com>
  * This file is distributed under the MIT License; see LICENSE for details.
  */
@@ -69,6 +72,8 @@ note_t              g_tune[TUNE_LENGTH];
 uint_fast8_t        g_tune_note = TUNE_LENGTH;
 uint_fast8_t        g_tune_note_count = TUNE_LENGTH;
 uint32_t            g_last_update_us;
+uint_fast8_t        g_victory_row;
+uint_fast8_t        g_victory_col;
 
 
 /* Functions. */
@@ -100,6 +105,10 @@ void board_clear( void )
 
   /* Reset the max cell record. */
   g_max_cell = 2;
+
+  /* And flag the victory conditions as not yet reached. */
+  g_victory_row = BOARD_HEIGHT;
+  g_victory_col = BOARD_WIDTH;
 
   /* All done. */
   return;
@@ -601,14 +610,16 @@ void update( uint32_t p_tick )
     /* First ping at an arbitrary point in the fade up! */
     if ( ( g_splash_tone > 50 ) && ( g_tune_note == TUNE_LENGTH ) )
     {
-      g_tune[0].frequency = 800;
-      g_tune[0].duration = 200;
-      g_tune[1].frequency = 710;
-      g_tune[1].duration = 200;
-      g_tune[2].frequency = 525;
-      g_tune[2].duration = 300;
+      g_tune[0].frequency = 932;
+      g_tune[0].duration = 300;
+      g_tune[1].frequency = 880;
+      g_tune[1].duration = 130;
+      g_tune[2].frequency = 784;
+      g_tune[2].duration = 130;
+      g_tune[3].frequency = 494;
+      g_tune[3].duration = 300;
       g_tune_note = 0;
-      g_tune_note_count = 3;
+      g_tune_note_count = 4;
     }
 
     if ( g_splash_tone >= 150 )
@@ -693,7 +704,36 @@ void update( uint32_t p_tick )
         if ( g_moves[l_index].end_value > g_max_cell )
         {
           g_max_cell = g_moves[l_index].end_value;
-          picosystem::play( g_voice, 750 + ( g_max_cell * 2 ), 300, 75 );
+
+          /* Check to see if we've maxxed out, in which case... victory! */
+          if ( g_moves[l_index].end_value == 2048 )
+          {
+            /* Remember what cell won it. */
+            g_victory_row = g_moves[l_index].end_row;
+            g_victory_col = g_moves[l_index].end_col;
+
+            /* And play something ... suitable. */
+            g_tune[0].frequency = 440;
+            g_tune[0].duration = 50;
+            g_tune[1].frequency = 494;
+            g_tune[1].duration = 50;
+            g_tune[2].frequency = 587;
+            g_tune[2].duration = 50;
+            g_tune[3].frequency = 494;
+            g_tune[3].duration = 50;
+            g_tune[4].frequency = 740;
+            g_tune[4].duration = 200;
+            g_tune[5].frequency = 740;
+            g_tune[5].duration = 200;
+            g_tune[6].frequency = 659;
+            g_tune[6].duration = 150;
+            g_tune_note = 0;
+            g_tune_note_count = 7;
+          }
+          else
+          {
+            picosystem::play( g_voice, 750 + ( g_max_cell * 2 ), 300, 75 );
+          }
         }
       }
       else
@@ -723,7 +763,15 @@ void update( uint32_t p_tick )
   if ( picosystem::pressed( picosystem::B ) )
   {
     /* Quick n dirty reset; probably shouldn't stay here forever... */
+    g_victory_col = BOARD_WIDTH;
+    g_victory_row = BOARD_HEIGHT;
     g_playing = false;
+  }
+
+  /* That's the only input during victory; no moving! */
+  if ( ( g_victory_col != BOARD_WIDTH) || ( g_victory_row != BOARD_HEIGHT ) )
+  {
+    return;
   }
 
   /* Handle movement. */
@@ -897,7 +945,7 @@ void draw( uint32_t p_tick )
   if ( !g_playing )
   {
     /* Fade the play area back some. */
-    picosystem::pen( 5, 5, 5, 14 );
+    picosystem::pen( 6, 6, 6, 10 );
     picosystem::frect( 0, 0, picosystem::SCREEN->w, picosystem::SCREEN->h );
 
     /* And then the title stuff. */
@@ -905,6 +953,24 @@ void draw( uint32_t p_tick )
       ( picosystem::SCREEN->w - 112 ) / 2, 48 );
     picosystem::blit( &spritesheet_buffer, 112, 168, 112, 48,
       ( picosystem::SCREEN->w - 112 ) / 2, picosystem::SCREEN->h - ( 32 + 48 ) );
+  }
+
+  /* And if we're in a victory condition, render something too. */
+  if ( ( g_victory_col != BOARD_WIDTH ) || ( g_victory_row != BOARD_HEIGHT ) )
+  {
+    /* Fade the play area back some. */
+    picosystem::pen( 6, 6, 6, 10 );
+    picosystem::frect( 0, 0, picosystem::SCREEN->w, picosystem::SCREEN->h );
+
+    /* Redraw the victory cell brightly. */
+    picosystem::blit( &spritesheet_buffer, 
+      sprite_col( 2048 ), sprite_row( 2048 ), 56, 56, 
+      (g_victory_col * 60) + 2, (g_victory_row * 60) + 2 );
+
+    /* And some suitable "victory" splashes too. */
+    picosystem::blit( &spritesheet_buffer, 0, 304, 160, 32, 
+                      std::rand()%(picosystem::SCREEN->w-160),
+                      std::rand()%(picosystem::SCREEN->h-32) );
   }
 
   /* All done. */
