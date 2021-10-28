@@ -42,12 +42,19 @@ typedef struct
   uint_fast8_t  pixels_to_end;
 } move_t;
 
+typedef struct 
+{
+  uint32_t      frequency;
+  uint32_t      duration;
+} note_t;
+
 
 /* Globals (shhh!) */
 
 #define BOARD_WIDTH   4
 #define BOARD_HEIGHT  4
 #define MOVE_MAX      12
+#define TUNE_LENGTH   16
 
 bool                g_playing = false;
 bool                g_moving = false;
@@ -58,6 +65,10 @@ bool                g_splashing = true;
 uint_fast8_t        g_splash_tone = 0;
 picosystem::voice_t g_voice;
 uint16_t            g_max_cell = 0;
+note_t              g_tune[TUNE_LENGTH];
+uint_fast8_t        g_tune_note = TUNE_LENGTH;
+uint_fast8_t        g_tune_note_count = TUNE_LENGTH;
+uint32_t            g_last_update_us;
 
 
 /* Functions. */
@@ -551,8 +562,14 @@ void init( void )
   g_splashing = true;
   g_splash_tone = 0;
 
+  /* And set the music to be off. */
+  g_tune_note = g_tune_note_count = TUNE_LENGTH;
+
   /* Set up the voice that we'll use for beeps. */
   g_voice = picosystem::voice( 50, 100, 50, 100 );
+
+  /* Remember the time, so we can keep track in updates. */
+  g_last_update_us = picosystem::time_us();
 
   /* All done. */
   return;
@@ -560,27 +577,38 @@ void init( void )
 
 
 /*
- * update - called every tick (10ms) to update the game world. Passed a count
+ * update - called every frame to update the game world. Passed a count
  *          of update frames since the game launched.
+ *          This is *probably* around 50hz, but not guaranteed so we need 
+ *          to measure time for ourselves...
  */
 
 void update( uint32_t p_tick )
 {
   uint_fast8_t l_direction = 0;
 
+  /* We need to keep our own time. */
+  uint32_t l_current_us = picosystem::time_us();
+  uint32_t l_past_us = l_current_us - g_last_update_us;
+
+  uint8_t l_ticks = l_past_us / 5000;
+
   /* Don't do anything until the splash screen is finished with. */
   if ( g_splashing )
   {
-    g_splash_tone += 1;
+    g_splash_tone += l_ticks;
 
     /* First ping at an arbitrary point in the fade up! */
-    if ( g_splash_tone == 50 )
+    if ( ( g_splash_tone > 50 ) && ( g_tune_note == TUNE_LENGTH ) )
     {
-      picosystem::play( g_voice, 800, 200, 50 );
-    }
-    if ( g_splash_tone == 100 )
-    {
-      picosystem::play( g_voice, 710, 200, 50 );
+      g_tune[0].frequency = 800;
+      g_tune[0].duration = 200;
+      g_tune[1].frequency = 710;
+      g_tune[1].duration = 200;
+      g_tune[2].frequency = 525;
+      g_tune[2].duration = 300;
+      g_tune_note = 0;
+      g_tune_note_count = 3;
     }
 
     if ( g_splash_tone >= 150 )
@@ -588,15 +616,19 @@ void update( uint32_t p_tick )
       /* Start fading down. */
       g_splash_tone = 200;
       g_splashing = false;
-
-      /* And ping, too. */
-      picosystem::play( g_voice, 525, 300, 50 );
     }
+
+    /* Save the frame time. */
+    g_last_update_us = l_current_us;
     return;
   }
   if ( g_splash_tone > 0 )
   {
-    g_splash_tone -= 1;
+    /* Reduce the splash. */
+    g_splash_tone -= (g_splash_tone < l_ticks) ? g_splash_tone : l_ticks;
+
+    /* Save the frame time. */
+    g_last_update_us = l_current_us;
     return;
   }
 
@@ -616,6 +648,9 @@ void update( uint32_t p_tick )
       g_playing = true;
     }
 
+    /* Save the frame time. */
+    g_last_update_us = l_current_us;
+
     /* Other than that, nothing much to do. */
     return;
   }
@@ -624,7 +659,7 @@ void update( uint32_t p_tick )
   if ( g_spawn.progress < 100 )
   {
     /* Tick through the progress by 5% per tick. */
-    g_spawn.progress += 5;
+    g_spawn.progress += l_ticks*4;
 
     /* Now if we've finished, we need to fill in the actual cell. */
     if ( g_spawn.progress >= 100 )
@@ -646,7 +681,7 @@ void update( uint32_t p_tick )
     if ( g_moves[l_index].pixels_to_end > 0 )
     {
       l_was_moving = true;
-      g_moves[l_index].pixels_to_end -= 10;
+      g_moves[l_index].pixels_to_end -= (g_moves[l_index].pixels_to_end<(l_ticks*5)) ? g_moves[l_index].pixels_to_end : l_ticks*5;
 
       /* If that means we've reached the end, make it permanent. */
       if ( g_moves[l_index].pixels_to_end == 0 )
@@ -668,6 +703,9 @@ void update( uint32_t p_tick )
       }
     }
   }
+
+  /* Save the frame time - nothing else time dependent to do. */
+  g_last_update_us = l_current_us;
 
   /* If we were moving and have now stopped, spawn. */
   if ( l_was_moving && l_moving == 0 )
@@ -724,6 +762,16 @@ void update( uint32_t p_tick )
 
 void draw( uint32_t p_tick )
 {
+  /* Handle any tune we're playing. */
+  if ( g_tune_note < g_tune_note_count )
+  {
+    if ( !picosystem::audio_playing() )
+    {
+      play( g_voice, g_tune[g_tune_note].frequency, g_tune[g_tune_note].duration, 50 );
+      g_tune_note++;
+    }
+  }
+
   /* If we have a splash screen to draw, just do that. */
   if ( g_splashing || g_splash_tone > 0 )
   {
