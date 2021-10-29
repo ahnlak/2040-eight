@@ -74,6 +74,8 @@ uint_fast8_t        g_tune_note_count = TUNE_LENGTH;
 uint32_t            g_last_update_us;
 uint_fast8_t        g_victory_row;
 uint_fast8_t        g_victory_col;
+bool                g_muted = false;
+uint_fast8_t        g_flash_mute = 0;
 
 
 /* Functions. */
@@ -643,6 +645,19 @@ void update( uint32_t p_tick )
     return;
   }
 
+  /* Update any flash notification. */
+  if ( g_flash_mute > 0 )
+  {
+    g_flash_mute -= (g_flash_mute < l_ticks) ? g_flash_mute : l_ticks;
+  }
+
+  /* A toggle on X to mute our sound. */
+  if ( picosystem::pressed( picosystem::X ) )
+  {
+    g_muted = !g_muted;
+    g_flash_mute = 100;
+  }
+
   /* If we're not in the game, limited options. */
   if ( !g_playing )
   {
@@ -657,6 +672,18 @@ void update( uint32_t p_tick )
 
       /* And set the playing flag. */
       g_playing = true;
+
+      /* And play a jaunty little tune. */
+      g_tune[0].frequency = 740;
+      g_tune[0].duration = 100;
+      g_tune[1].frequency = 659;
+      g_tune[1].duration = 100;
+      g_tune[2].frequency = 740;
+      g_tune[2].duration = 100;
+      g_tune[3].frequency = 587;
+      g_tune[3].duration = 100;
+      g_tune_note = 0;
+      g_tune_note_count = 4;
     }
 
     /* Save the frame time. */
@@ -706,7 +733,7 @@ void update( uint32_t p_tick )
           g_max_cell = g_moves[l_index].end_value;
 
           /* Check to see if we've maxxed out, in which case... victory! */
-          if ( g_moves[l_index].end_value == 2048 )
+          if ( g_moves[l_index].end_value == 16 )
           {
             /* Remember what cell won it. */
             g_victory_row = g_moves[l_index].end_row;
@@ -732,7 +759,11 @@ void update( uint32_t p_tick )
           }
           else
           {
-            picosystem::play( g_voice, 750 + ( g_max_cell * 2 ), 300, 75 );
+            /* Don't beep if we're muted. */
+            if ( !g_muted )
+            {
+              picosystem::play( g_voice, 750 + ( g_max_cell * 2 ), 300, 75 );
+            }
           }
         }
       }
@@ -813,6 +844,10 @@ void draw( uint32_t p_tick )
   /* Handle any tune we're playing. */
   if ( g_tune_note < g_tune_note_count )
   {
+    /* If we're muted, skip to the end of the tune. */
+    g_tune_note = g_tune_note_count;
+    
+    /* Play the next note if ready. */
     if ( !picosystem::audio_playing() )
     {
       play( g_voice, g_tune[g_tune_note].frequency, g_tune[g_tune_note].duration, 50 );
@@ -949,10 +984,10 @@ void draw( uint32_t p_tick )
     picosystem::frect( 0, 0, picosystem::SCREEN->w, picosystem::SCREEN->h );
 
     /* And then the title stuff. */
-    picosystem::blit( &spritesheet_buffer, 0, 168, 112, 112, 
+    picosystem::blit( &spritesheet_buffer, 0, 168, 112, 72, 
       ( picosystem::SCREEN->w - 112 ) / 2, 48 );
-    picosystem::blit( &spritesheet_buffer, 112, 168, 112, 48,
-      ( picosystem::SCREEN->w - 112 ) / 2, picosystem::SCREEN->h - ( 32 + 48 ) );
+    picosystem::blit( &spritesheet_buffer, 112, 168, 112, 72,
+      ( picosystem::SCREEN->w - 112 ) / 2, picosystem::SCREEN->h - ( 16 + 72 ) );
   }
 
   /* And if we're in a victory condition, render something too. */
@@ -971,6 +1006,16 @@ void draw( uint32_t p_tick )
     picosystem::blit( &spritesheet_buffer, 0, 304, 160, 32, 
                       std::rand()%(picosystem::SCREEN->w-160),
                       std::rand()%(picosystem::SCREEN->h-32) );
+  }
+
+  /* The last thing to draw is any flash mute notification, as that is drawn */
+  /* atop everything else.                                                   */
+  if ( g_flash_mute > 0 )
+  {
+    picosystem::blit( &spritesheet_buffer, g_muted?0:48, 256, 48, 48,
+      ( picosystem::SCREEN->w - 48 ) / 2 - g_flash_mute,
+      ( picosystem::SCREEN->h - 48 ) / 2 - g_flash_mute,
+      48+g_flash_mute+g_flash_mute, 48+g_flash_mute+g_flash_mute );
   }
 
   /* All done. */
