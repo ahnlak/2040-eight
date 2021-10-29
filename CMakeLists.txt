@@ -27,7 +27,7 @@ picosystem_executable(2040-eight
 
 # Set some Pico version info
 pico_set_program_name(2040-eight "2040-eight")
-pico_set_program_version(2040-eight "v0.2")
+pico_set_program_version(2040-eight "v0.3")
 
 #pixel_double(2040-eight)
 no_spritesheet(2040-eight)
