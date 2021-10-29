@@ -733,7 +733,7 @@ void update( uint32_t p_tick )
           g_max_cell = g_moves[l_index].end_value;
 
           /* Check to see if we've maxxed out, in which case... victory! */
-          if ( g_moves[l_index].end_value == 16 )
+          if ( g_moves[l_index].end_value == 2048 )
           {
             /* Remember what cell won it. */
             g_victory_row = g_moves[l_index].end_row;
@@ -845,7 +845,10 @@ void draw( uint32_t p_tick )
   if ( g_tune_note < g_tune_note_count )
   {
     /* If we're muted, skip to the end of the tune. */
-    g_tune_note = g_tune_note_count;
+    if ( g_muted )
+    {
+      g_tune_note = g_tune_note_count;
+    }
     
     /* Play the next note if ready. */
     if ( !picosystem::audio_playing() )
