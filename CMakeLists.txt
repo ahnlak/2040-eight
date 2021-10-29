@@ -6,6 +6,9 @@
 # Imagine we could handle any modern version, but CMake complains if we don't say
 cmake_minimum_required(VERSION 3.12)
 
+# Make sure we're set to a suitable board type
+set(PICO_BOARD pimoroni_picosystem)
+
 # Pull in PICO SDK (must be before project)
 include(${PICOSYSTEM_DIR}/pico_sdk_import.cmake)
 
